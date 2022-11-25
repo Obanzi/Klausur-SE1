@@ -1,0 +1,157 @@
+/*
+"build.gradle" for Assignments in SE1.
+Allows to
+   -integrate multiple Java-Programs, each having its own main()-class.
+   -pack the Programs into one ZIP
+See "etc/mci gradle build file" on Sakai for HowTos and latest versions.
+
+Version 1.1.3.
+
+changelog:
+- 1.1.3: Added "   testImplementation 'org.junit.jupiter:junit-jupiter:5.5.2'"  (in addition to "-api" lib)
+                   (Required for methods using package "org.junit.jupiter.*)"
+
+*/
+
+plugins {
+    id 'java'
+    id 'application'
+}
+
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+/* myExercises is a HashMap containing all exercise names(keys) and respective class containing your public static void main() method(values).
+Therefore for every exercise in the assignment please add a name and the respective main class in the map
+
+Example:
+
+"strategy": "se1.hu3.strategy.Main",
+"factory": "se1.hu3.factory.Main"
+*/
+project.ext.myExercises = [
+        "dibsgui":     "se1.dibsefilesystem.App"
+]
+
+//project.ext.myassignments.put("myelement3", "myvalue3")
+
+def map = project.ext.myExercises
+def set = map?.keySet()
+def exerciseName = set?.iterator()?.next()
+def defaultMainClassName = map?.get(exerciseName)
+
+mainClassName = defaultMainClassName
+
+repositories {
+    maven { url 'https://repo.gradle.org/gradle/libs-releases' }
+    mavenCentral()
+}
+
+test {
+    useJUnitPlatform()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:1.8.0-beta4'
+    implementation "org.gradle:gradle-tooling-api:7.1"
+    implementation group: 'com.google.guava', name: 'guava-jdk5', version: '17.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.5.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.5.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.5.2'
+    testImplementation 'org.hamcrest:hamcrest-library:2.1'
+}
+
+/*Following is the example to pass parameter while running mcirun
+myExercise is the key in HashMap myExercises defined above.
+gradle mcirun -Pex=myExercise*/
+
+task mcirun {
+    group = "Execution"
+    description = "Run Option main class with JavaExecTask"
+    dependsOn 'build'
+
+    doLast {
+        tasks.create('myTaskExec', JavaExec) {
+            classpath = sourceSets.main.runtimeClasspath
+            standardInput = System.in
+            if (project.hasProperty('ex')){
+                def mainClassNameParam = map.get(ex)
+                if(mainClassNameParam)
+                    mainClass = mainClassNameParam
+                else
+                    println 'Invalid exercise name specified.'
+            }else {
+                def defaultMain;
+                mainClass = defaultMain
+                println 'Please enter the name of the assignment to run the specific main class. Following are the possible values.'
+                for (def key : set) {
+                    println key
+                }
+                println ''
+                if(exerciseName){
+                    println 'Running the default main class,because you have not specified any exercise name.'
+                    mainClass = defaultMainClassName
+                }else{
+                    println 'Please configure the myExercises map'
+                }
+            }
+
+        }.exec()
+    }
+}
+
+/* mcirunAllMainClass task is used to run all the java main class in the assignment by iterating the myExercises HashMap
+*/
+task mcirunAllMainClass {
+    group = "Execution"
+    description = "Run Option main class with JavaExecTask"
+    dependsOn 'build'
+
+    doLast {
+        task runTask {
+            group = "Execution"
+            description = "Run Option main class with JavaExecTask"
+            dependsOn 'build'
+            map.each {
+                def key = it.key
+                def value = it.value
+
+                println 'Running Main class for exercise name:' + key
+                println ''
+
+                tasks.create(key, JavaExec) {
+                    mainClass = value
+                    classpath = sourceSets.main.runtimeClasspath
+                }.exec()
+                println ''
+            }
+        }
+    }
+}
+
+
+//Creates a Assignment.zip under build/distributions
+task mcisrczip(type: Zip) {
+    from projectDir
+    include 'src/**/*'
+    include '*.gradle'
+    include 'gradlew'
+    include 'gradlew.bat'
+    include 'gradle/**/*'
+    exclude '.gradle'
+    archiveFileName = "Assignment.zip"
+}
+
+tasks.withType(JavaExec) {
+    if (System.getProperty('DEBUG', 'false') == 'true') {
+        jvmArgs '-Xdebug', '-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=9099'
+    }
+}
+
+
+// Für Programme mit Tastatureingabe.
+run {
+    standardInput = System.in
+}
